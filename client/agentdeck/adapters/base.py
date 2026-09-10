@@ -23,7 +23,9 @@ class AgentAdapter(ABC):
         self._process: asyncio.subprocess.Process | None = None
 
     @abstractmethod
-    async def run(self, prompt: str, cwd: Path, resume_session_id: str | None = None) -> AsyncIterator[AgentEvent]:
+    async def run(
+        self, prompt: str, cwd: Path, resume_session_id: str | None = None
+    ) -> AsyncIterator[AgentEvent]:
         yield AgentEvent("system")
 
     async def cancel(self) -> None:
@@ -34,4 +36,3 @@ class AgentAdapter(ABC):
             except asyncio.TimeoutError:
                 self._process.kill()
                 await self._process.wait()
-

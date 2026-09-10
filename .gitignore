@@ -1,5 +1,6 @@
 .env
 .venv/
+.tools/
 __pycache__/
 .pytest_cache/
 .mypy_cache/
@@ -13,4 +14,3 @@ dist/
 coverage/
 *.log
 client-state/
-

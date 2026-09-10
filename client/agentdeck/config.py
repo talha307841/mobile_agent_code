@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import stat
 from pathlib import Path
@@ -76,4 +75,3 @@ def resolve_allowed_repo(config: ClientConfig, repository_id: UUID, requested_pa
     if requested != configured or not configured.is_dir():
         raise PermissionError("Repository path does not match allowlist")
     return configured
-

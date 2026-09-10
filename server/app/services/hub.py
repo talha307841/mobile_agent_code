@@ -4,9 +4,8 @@ import asyncio
 from collections import defaultdict
 from uuid import UUID
 
-from fastapi import WebSocket
-
 from agentdeck_protocol import Envelope
+from fastapi import WebSocket
 
 
 class ConnectionHub:
@@ -63,4 +62,3 @@ class ConnectionHub:
 
 
 hub = ConnectionHub()
-

@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 os.environ["AGENTDECK_DATABASE_URL"] = "sqlite+aiosqlite:///./test-agentdeck.db"
 os.environ["AGENTDECK_JWT_SECRET"] = "test-secret-that-is-long-enough-for-tests"
@@ -28,7 +27,10 @@ def client():
 
 @pytest.fixture
 def account(client):
-    response = client.post("/api/v1/auth/register", json={"email": "owner@example.com", "password": "correct horse battery staple"})
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": "owner@example.com", "password": "correct horse battery staple"},
+    )
     assert response.status_code == 201
     return response.json()
 
@@ -36,4 +38,3 @@ def account(client):
 @pytest.fixture
 def auth(account):
     return {"Authorization": f"Bearer {account['access_token']}"}
-

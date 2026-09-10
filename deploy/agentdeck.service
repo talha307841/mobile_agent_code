@@ -12,7 +12,6 @@ Environment=PYTHONUNBUFFERED=1
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=read-only
 ReadWritePaths=%h/.config/agentdeck
 
 [Install]

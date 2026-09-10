@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,8 +22,15 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         return [value.strip() for value in self.allowed_origins.split(",") if value.strip()]
 
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        if self.environment == "production" and (
+            len(self.jwt_secret) < 32 or "development" in self.jwt_secret
+        ):
+            raise ValueError("Production requires a random JWT secret of at least 32 characters")
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

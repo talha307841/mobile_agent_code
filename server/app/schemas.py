@@ -3,9 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
 from agentdeck_protocol import TaskState
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class ORMModel(BaseModel):
@@ -125,4 +124,3 @@ class ApprovalView(ORMModel):
     status: str
     requested_at: datetime
     decided_at: datetime | None
-

@@ -20,11 +20,15 @@ async def current_user(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> User:
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+        )
     try:
         user_id: UUID = decode_jwt(credentials.credentials, settings, "access")
     except (jwt.InvalidTokenError, ValueError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        ) from None
     user = await db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user")
@@ -34,4 +38,3 @@ async def current_user(
 Db = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(current_user)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
-

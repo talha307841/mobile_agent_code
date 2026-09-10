@@ -12,7 +12,9 @@ from .base import AgentAdapter, AgentEvent
 class CodexAdapter(AgentAdapter):
     name = "codex"
 
-    async def run(self, prompt: str, cwd: Path, resume_session_id: str | None = None) -> AsyncIterator[AgentEvent]:
+    async def run(
+        self, prompt: str, cwd: Path, resume_session_id: str | None = None
+    ) -> AsyncIterator[AgentEvent]:
         binary = shutil.which("codex")
         if not binary:
             raise RuntimeError("Codex CLI is not installed or not on PATH")
@@ -24,7 +26,18 @@ class CodexAdapter(AgentAdapter):
         if resume_session_id:
             command = [binary, "exec", "resume", resume_session_id, "--json", "-"]
         else:
-            command = [binary, "exec", "--json", "--sandbox", "workspace-write", "--ask-for-approval", "never", "-C", str(cwd), "-"]
+            command = [
+                binary,
+                "exec",
+                "--json",
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "-C",
+                str(cwd),
+                "-",
+            ]
         self._process = await asyncio.create_subprocess_exec(
             *command,
             cwd=cwd,
@@ -58,4 +71,3 @@ class CodexAdapter(AgentAdapter):
 def _event_text(event: dict) -> str:
     item = event.get("item") or {}
     return str(item.get("text") or item.get("command") or event.get("message") or "")
-

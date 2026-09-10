@@ -66,4 +66,3 @@ class TaskEvent(BaseModel):
     stream: str = "system"
     text: str = ""
     raw: dict[str, Any] | None = None
-

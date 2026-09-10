@@ -14,5 +14,12 @@ def record_audit(
     details: dict | None = None,
     ip_address: str | None = None,
 ) -> None:
-    db.add(AuditLog(event=event, user_id=user_id, device_id=device_id, details=details or {}, ip_address=ip_address))
-
+    db.add(
+        AuditLog(
+            event=event,
+            user_id=user_id,
+            device_id=device_id,
+            details=details or {},
+            ip_address=ip_address,
+        )
+    )

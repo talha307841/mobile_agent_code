@@ -28,10 +28,19 @@ def login(
         response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
         response.raise_for_status()
         access = response.json()["access_token"]
-        response = client.post("/api/v1/devices", headers={"Authorization": f"Bearer {access}"}, json={"name": name, "label": label, "default_agent": config.default_agent})
+        response = client.post(
+            "/api/v1/devices",
+            headers={"Authorization": f"Bearer {access}"},
+            json={"name": name, "label": label, "default_agent": config.default_agent},
+        )
         response.raise_for_status()
         registration = response.json()
-    config.server_url, config.device_id, config.device_name, config.label = server.rstrip("/"), UUID(registration["id"]), name, label
+    config.server_url, config.device_id, config.device_name, config.label = (
+        server.rstrip("/"),
+        UUID(registration["id"]),
+        name,
+        label,
+    )
     save_config(config)
     save_credential(registration["credential"])
     typer.echo(f"Registered {name} ({config.device_id})")

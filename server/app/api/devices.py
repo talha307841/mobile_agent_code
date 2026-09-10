@@ -37,29 +37,52 @@ async def register_device(body: DeviceRegister, user: CurrentUser, db: Db) -> De
 
 @router.get("", response_model=list[DeviceView])
 async def list_devices(user: CurrentUser, db: Db) -> list[DeviceView]:
-    devices = list((await db.scalars(select(Device).where(Device.user_id == user.id, Device.revoked.is_(False)).order_by(Device.label, Device.name))).all())
+    devices = list(
+        (
+            await db.scalars(
+                select(Device)
+                .where(Device.user_id == user.id, Device.revoked.is_(False))
+                .order_by(Device.label, Device.name)
+            )
+        ).all()
+    )
     now = datetime.now(timezone.utc)
     result = []
     for device in devices:
-        online = hub.device_online(device.id) and bool(device.last_seen_at and (now - device.last_seen_at).total_seconds() < 60)
+        online = hub.device_online(device.id) and bool(
+            device.last_seen_at and (now - device.last_seen_at).total_seconds() < 60
+        )
         result.append(DeviceView.model_validate(device).model_copy(update={"online": online}))
     return result
 
 
 @router.get("/{device_id}/repositories", response_model=list[RepositoryView])
 async def repositories(device_id: UUID, user: CurrentUser, db: Db) -> list[Repository]:
-    device = await db.scalar(select(Device).where(Device.id == device_id, Device.user_id == user.id, Device.revoked.is_(False)))
+    device = await db.scalar(
+        select(Device).where(
+            Device.id == device_id, Device.user_id == user.id, Device.revoked.is_(False)
+        )
+    )
     if device is None:
         raise HTTPException(status_code=404, detail="Device not found")
-    return list((await db.scalars(select(Repository).where(Repository.device_id == device_id, Repository.enabled.is_(True)).order_by(Repository.name))).all())
+    return list(
+        (
+            await db.scalars(
+                select(Repository)
+                .where(Repository.device_id == device_id, Repository.enabled.is_(True))
+                .order_by(Repository.name)
+            )
+        ).all()
+    )
 
 
 @router.delete("/{device_id}", status_code=204)
 async def revoke_device(device_id: UUID, user: CurrentUser, db: Db) -> None:
-    device = await db.scalar(select(Device).where(Device.id == device_id, Device.user_id == user.id))
+    device = await db.scalar(
+        select(Device).where(Device.id == device_id, Device.user_id == user.id)
+    )
     if device is None:
         raise HTTPException(status_code=404, detail="Device not found")
     device.revoked = True
     record_audit(db, "device.revoked", user_id=user.id, device_id=device.id)
     await db.commit()
-

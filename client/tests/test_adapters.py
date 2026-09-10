@@ -1,5 +1,4 @@
 import pytest
-
 from agentdeck.adapters import MockAdapter, create_adapter
 
 
@@ -13,4 +12,3 @@ def test_adapter_factory():
     assert create_adapter("mock").name == "mock"
     with pytest.raises(ValueError):
         create_adapter("unknown")
-
