@@ -49,8 +49,14 @@ async def list_devices(user: CurrentUser, db: Db) -> list[DeviceView]:
     now = datetime.now(timezone.utc)
     result = []
     for device in devices:
+        last_seen_at = device.last_seen_at
+        if last_seen_at is not None and last_seen_at.tzinfo is None:
+            # SQLite does not preserve timezone information even when the
+            # SQLAlchemy column is declared timezone-aware. Stored timestamps
+            # are UTC, so restore that context before calculating freshness.
+            last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
         online = hub.device_online(device.id) and bool(
-            device.last_seen_at and (now - device.last_seen_at).total_seconds() < 60
+            last_seen_at and (now - last_seen_at).total_seconds() < 60
         )
         result.append(DeviceView.model_validate(device).model_copy(update={"online": online}))
     return result

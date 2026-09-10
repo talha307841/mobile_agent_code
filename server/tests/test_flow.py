@@ -41,6 +41,9 @@ def test_end_to_end_websocket_dispatch_stream_completion(client, account, auth):
             }
         )
         assert laptop.receive_json()["type"] == "ack"
+        listed = client.get("/api/v1/devices", headers=auth)
+        assert listed.status_code == 200
+        assert listed.json()[0]["online"] is True
         with client.websocket_connect(f"/ws/mobile?token={account['access_token']}") as mobile:
             response = client.post(
                 "/api/v1/tasks",
