@@ -39,7 +39,8 @@ export function connectEvents(onMessage: (message: Envelope) => void, onState?: 
   const connect = () => {
     if (stopped || !tokens) return;
     const wsUrl = baseUrl.replace(/^http/, 'ws');
-    socket = new WebSocket(`${wsUrl}/ws/mobile`, undefined, {headers: {Authorization: `Bearer ${tokens.access_token}`}});
+    const NativeWebSocket = WebSocket as unknown as new (url: string, protocols?: string[], options?: {headers?: Record<string, string>}) => WebSocket;
+    socket = new NativeWebSocket(`${wsUrl}/ws/mobile`, [], {headers: {Authorization: `Bearer ${tokens.access_token}`}});
     socket.onopen = () => { attempt = 0; onState?.(true); };
     socket.onmessage = event => { try { onMessage(JSON.parse(event.data)); } catch {} };
     socket.onclose = () => { onState?.(false); if (!stopped) timer = setTimeout(connect, Math.min(1000 * 2 ** attempt++, 30000)); };

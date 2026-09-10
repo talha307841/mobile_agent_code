@@ -39,7 +39,7 @@ dev = [
 agentdeck = "agentdeck.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["server/app", "client/agentdeck", "shared/agentdeck_protocol"]
+packages = ["server", "client/agentdeck", "shared/agentdeck_protocol"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -218,6 +218,7 @@ async def decide_approval(
                     "approval_id": str(approval.id),
                     "task_id": str(task.id),
                     "approved": body.approved,
+                    "action": approval.action,
                 },
             ),
         )

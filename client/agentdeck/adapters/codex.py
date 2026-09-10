@@ -21,7 +21,8 @@ class CodexAdapter(AgentAdapter):
         safety = (
             "\n\nRemote execution policy: Work only inside the current repository. "
             "Do not push, deploy, run database migrations, delete files outside ordinary code edits, "
-            "or perform destructive commands. Explain any such required action in your final response."
+            "or perform destructive commands unless this prompt contains an AgentDeck approval grant. "
+            "Explain any blocked action in your final response."
         )
         if resume_session_id:
             command = [binary, "exec", "resume", resume_session_id, "--json", "-"]

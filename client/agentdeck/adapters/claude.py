@@ -18,6 +18,11 @@ class ClaudeCodeAdapter(AgentAdapter):
         binary = shutil.which("claude")
         if not binary:
             raise RuntimeError("Claude Code CLI is not installed or not on PATH")
+        prompt += (
+            "\n\nRemote execution policy: work only inside the current repository. Do not push, "
+            "deploy, migrate databases, or run destructive commands unless this prompt contains "
+            "an AgentDeck approval grant."
+        )
         command = [
             binary,
             "-p",

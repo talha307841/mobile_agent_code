@@ -10,8 +10,12 @@
       "versionCode": 1,
       "permissions": []
     },
-    "plugins": ["expo-secure-store"],
-    "extra": {"apiUrl": "http://10.0.2.2:8000"}
+    "plugins": [
+      "expo-secure-store",
+      "expo-status-bar"
+    ],
+    "extra": {
+      "apiUrl": "http://10.0.2.2:8000"
+    }
   }
 }
-

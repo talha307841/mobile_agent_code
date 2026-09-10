@@ -1,4 +1,8 @@
+import asyncio
+from pathlib import Path
 from uuid import uuid4
+
+from agentdeck.adapters.mock import MockAdapter
 
 
 def register_device(client, auth, name="Personal laptop", label="Personal"):
@@ -65,6 +69,27 @@ def test_end_to_end_websocket_dispatch_stream_completion(client, account, auth):
                 }
             )
             assert mobile.receive_json()["type"] == "task.event"
+
+            async def mock_run():
+                return [
+                    event
+                    async for event in MockAdapter().run(command["payload"]["prompt"], Path("/tmp"))
+                ]
+
+            mocked_events = asyncio.run(mock_run())
+            for sequence, event in enumerate(mocked_events, start=1):
+                laptop.send_json(
+                    {
+                        "type": "task.event",
+                        "payload": {
+                            "task_id": task["id"],
+                            "sequence": sequence,
+                            "stream": event.stream,
+                            "text": event.text,
+                        },
+                    }
+                )
+                assert mobile.receive_json()["type"] == "task.event"
             laptop.send_json(
                 {
                     "type": "task.result",

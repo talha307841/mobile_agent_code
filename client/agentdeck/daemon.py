@@ -188,6 +188,9 @@ class Daemon:
             payload = self.pending_approvals.pop(message.payload["task_id"], None)
             if payload:
                 if message.payload.get("approved"):
+                    payload["prompt"] += (
+                        f"\n\nAgentDeck approval grant: the user approved {message.payload.get('action', 'the requested protected action')}."
+                    )
                     await self._start_task(payload)
                 else:
                     await self._result(

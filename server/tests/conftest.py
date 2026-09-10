@@ -13,10 +13,12 @@ from server.app.models import Base
 
 @pytest.fixture(autouse=True)
 async def database():
+    await engine.dispose()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
     yield
+    await engine.dispose()
 
 
 @pytest.fixture
