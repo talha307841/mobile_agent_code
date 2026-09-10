@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agentdeck
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentdeck-dev-password}
+      POSTGRES_DB: agentdeck
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentdeck"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  server:
+    build: .
+    environment:
+      AGENTDECK_ENVIRONMENT: production
+      AGENTDECK_DATABASE_URL: postgresql+asyncpg://agentdeck:${POSTGRES_PASSWORD:-agentdeck-dev-password}@db:5432/agentdeck
+      AGENTDECK_JWT_SECRET: ${AGENTDECK_JWT_SECRET:?Set AGENTDECK_JWT_SECRET}
+      AGENTDECK_ALLOWED_ORIGINS: ${AGENTDECK_ALLOWED_ORIGINS:-http://localhost:8081}
+    command: ["sh", "-c", "alembic upgrade head && uvicorn server.app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"]
+    ports:
+      - "${AGENTDECK_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+volumes:
+  postgres-data:
+

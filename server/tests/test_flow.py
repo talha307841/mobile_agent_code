@@ -1,0 +1,45 @@
+import json
+from uuid import uuid4
+
+
+def register_device(client, auth, name="Personal laptop", label="Personal"):
+    response = client.post("/api/v1/devices", headers=auth, json={"name": name, "label": label, "default_agent": "codex"})
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_device_isolation(client, account, auth):
+    own = register_device(client, auth)
+    other_account = client.post("/api/v1/auth/register", json={"email": "other@example.com", "password": "other secure password"}).json()
+    other_auth = {"Authorization": f"Bearer {other_account['access_token']}"}
+    register_device(client, other_auth, "Work laptop", "Work")
+    devices = client.get("/api/v1/devices", headers=auth).json()
+    assert [item["id"] for item in devices] == [own["id"]]
+
+
+def test_end_to_end_websocket_dispatch_stream_completion(client, account, auth):
+    device = register_device(client, auth)
+    repo_id = str(uuid4())
+    with client.websocket_connect(f"/ws/device?token={device['credential']}") as laptop:
+        laptop.send_json({"type": "hello", "payload": {"repositories": [{"id": repo_id, "name": "demo", "path": "/tmp/demo"}], "metadata": {"agents": {"codex": True}}}})
+        assert laptop.receive_json()["type"] == "ack"
+        with client.websocket_connect(f"/ws/mobile?token={account['access_token']}") as mobile:
+            response = client.post("/api/v1/tasks", headers=auth, json={"device_id": device["id"], "repository_id": repo_id, "prompt": "Inspect the tests", "idempotency_key": "test-flow-0001"})
+            assert response.status_code == 201, response.text
+            task = response.json()
+            command = laptop.receive_json()
+            assert command["type"] == "task.start"
+            laptop.send_json({"type": "task.event", "payload": {"task_id": task["id"], "sequence": 0, "state": "STARTING", "stream": "system", "text": "Starting"}})
+            assert mobile.receive_json()["type"] == "task.event"
+            laptop.send_json({"type": "task.result", "payload": {"task_id": task["id"], "state": "COMPLETED", "result": {"diff": "ok"}, "agent_session_id": "session-1"}})
+            assert mobile.receive_json()["type"] == "task.result"
+    fetched = client.get(f"/api/v1/tasks/{task['id']}", headers=auth).json()
+    assert fetched["state"] == "COMPLETED"
+    assert fetched["result"]["diff"] == "ok"
+
+
+def test_offline_device_rejected(client, auth):
+    device = register_device(client, auth)
+    response = client.post("/api/v1/tasks", headers=auth, json={"device_id": device["id"], "repository_id": str(uuid4()), "prompt": "test", "idempotency_key": "offline-0001"})
+    assert response.status_code in (404, 409)
+
