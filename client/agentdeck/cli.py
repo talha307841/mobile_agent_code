@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import typer
@@ -31,6 +31,7 @@ def login(
     label: str = typer.Option("Personal", help="Work or Personal"),
 ) -> None:
     config = load_config()
+    previous_device_id = config.device_id
     with httpx.Client(base_url=server.rstrip("/"), timeout=20) as client:
         response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
         response.raise_for_status()
@@ -48,6 +49,10 @@ def login(
         name,
         label,
     )
+    if previous_device_id != config.device_id:
+        config.repositories = [
+            repository.model_copy(update={"id": uuid4()}) for repository in config.repositories
+        ]
     save_config(config)
     save_credential(registration["credential"])
     typer.echo(f"Registered {name} ({config.device_id})")
@@ -81,6 +86,17 @@ def repo_remove(name: str) -> None:
     if len(config.repositories) == before:
         raise typer.BadParameter("Repository not found")
     save_config(config)
+
+
+@repo_app.command("rekey")
+def repo_rekey() -> None:
+    """Issue fresh repository IDs after registering the laptop again."""
+    config = load_config()
+    config.repositories = [
+        repository.model_copy(update={"id": uuid4()}) for repository in config.repositories
+    ]
+    save_config(config)
+    typer.echo(f"Issued fresh IDs for {len(config.repositories)} repositories")
 
 
 @repo_app.command("discover")
