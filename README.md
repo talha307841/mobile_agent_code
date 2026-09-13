@@ -64,3 +64,18 @@ docker compose config
 ```
 
 See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [security](docs/security.md), and [deployment](docs/deployment.md).
+
+## Free cross-network testing
+
+Start a free temporary public relay. The script downloads the official
+`cloudflared` binary locally if it is not already installed:
+
+```bash
+./scripts/start-public-relay.sh
+```
+
+The command prints a `https://...trycloudflare.com` address. Enter that exact
+address in the phone app. On each additional laptop, clone/open this project
+and run the printed `connect-laptop.sh` command. The URL changes whenever the
+Quick Tunnel is recreated, and the relay laptop must remain powered on; use a
+named Cloudflare Tunnel or hosted relay for permanent use.

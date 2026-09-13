@@ -818,20 +818,20 @@ function LaptopSetup() {
           </Text>
         </View>
         <SetupStep number={1} title="Install AgentDeck">
-          <Text style={s.muted}>Open Terminal in the AgentDeck project, then run:</Text>
-          <CommandBlock>./scripts/install-client.sh</CommandBlock>
+          <Text style={s.muted}>On the laptop that will host the relay, install cloudflared and run:</Text>
+          <CommandBlock>./scripts/start-public-relay.sh</CommandBlock>
         </SetupStep>
-        <SetupStep number={2} title="Register this laptop">
-          <Text style={s.muted}>Use the same relay URL, email, and password as this phone.</Text>
-          <CommandBlock>agentdeck login</CommandBlock>
+        <SetupStep number={2} title="Use the public URL">
+          <Text style={s.muted}>The script prints an HTTPS URL. Use that exact URL when signing in on this phone and every laptop.</Text>
+          <CommandBlock>https://example.trycloudflare.com</CommandBlock>
         </SetupStep>
-        <SetupStep number={3} title="Add your projects">
-          <Text style={s.muted}>Discover every Git repository inside Documents:</Text>
-          <CommandBlock>agentdeck repo discover ~/Documents</CommandBlock>
+        <SetupStep number={3} title="Connect each laptop">
+          <Text style={s.muted}>On both laptops, open this project and replace URL with the one printed above:</Text>
+          <CommandBlock>./scripts/connect-laptop.sh URL ~/Documents</CommandBlock>
         </SetupStep>
-        <SetupStep number={4} title="Keep it connected">
-          <Text style={s.muted}>Start the background service now and after every login:</Text>
-          <CommandBlock>systemctl --user enable --now agentdeck</CommandBlock>
+        <SetupStep number={4} title="Keep the relay running">
+          <Text style={s.muted}>The free Quick Tunnel works across networks, but its URL changes after restart and the relay laptop must stay online.</Text>
+          <CommandBlock>systemctl --user status agentdeck</CommandBlock>
         </SetupStep>
         <View style={s.infoCard}>
           <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
