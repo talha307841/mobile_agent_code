@@ -78,7 +78,14 @@ async def _handle_device_message(device_id: UUID, user_id: UUID, envelope: Envel
             return
         if envelope.type == MessageType.HELLO:
             device.metadata_json = envelope.payload.get("metadata", {})
-            for item in envelope.payload.get("repositories", []):
+            reported = envelope.payload.get("repositories", [])
+            reported_ids = {UUID(item["id"]) for item in reported}
+            existing = list(
+                (await db.scalars(select(Repository).where(Repository.device_id == device_id))).all()
+            )
+            for repository in existing:
+                repository.enabled = repository.id in reported_ids
+            for item in reported:
                 repo_id = UUID(item["id"])
                 repo = await db.scalar(
                     select(Repository).where(

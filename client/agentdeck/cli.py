@@ -7,7 +7,14 @@ from uuid import UUID
 import httpx
 import typer
 
-from .config import RepoConfig, delete_credential, load_config, save_config, save_credential
+from .config import (
+    RepoConfig,
+    delete_credential,
+    discover_git_repositories,
+    load_config,
+    save_config,
+    save_credential,
+)
 from .daemon import Daemon
 
 app = typer.Typer(help="AgentDeck laptop client")
@@ -74,6 +81,31 @@ def repo_remove(name: str) -> None:
     if len(config.repositories) == before:
         raise typer.BadParameter("Repository not found")
     save_config(config)
+
+
+@repo_app.command("discover")
+def repo_discover(root: Path, prefix: str = typer.Option("")) -> None:
+    """Allowlist every Git repository below ROOT."""
+    config = load_config()
+    existing_paths = {Path(repo.path).resolve() for repo in config.repositories}
+    existing_names = {repo.name for repo in config.repositories}
+    added = 0
+    for path in discover_git_repositories(root):
+        if path in existing_paths:
+            continue
+        base_name = f"{prefix}{path.name}"
+        name = base_name
+        suffix = 2
+        while name in existing_names:
+            name = f"{base_name}-{suffix}"
+            suffix += 1
+        config.repositories.append(RepoConfig(name=name, path=str(path)))
+        existing_paths.add(path)
+        existing_names.add(name)
+        added += 1
+        typer.echo(f"Added {name}: {path}")
+    save_config(config)
+    typer.echo(f"Discovered {added} new repositories. Restart the daemon to sync them.")
 
 
 @app.command()

@@ -75,3 +75,19 @@ def resolve_allowed_repo(config: ClientConfig, repository_id: UUID, requested_pa
     if requested != configured or not configured.is_dir():
         raise PermissionError("Repository path does not match allowlist")
     return configured
+
+
+def discover_git_repositories(root: Path) -> list[Path]:
+    """Find Git working trees below an explicitly selected directory."""
+    resolved_root = root.expanduser().resolve(strict=True)
+    if not resolved_root.is_dir():
+        raise ValueError("Discovery root must be a directory")
+    found: list[Path] = []
+    ignored = {"node_modules", ".venv", "venv", ".cache", "build", "dist"}
+    for current, directories, _ in os.walk(resolved_root):
+        if ".git" in directories:
+            found.append(Path(current).resolve())
+            directories.clear()
+            continue
+        directories[:] = [name for name in directories if name not in ignored and not name.startswith(".")]
+    return sorted(found)

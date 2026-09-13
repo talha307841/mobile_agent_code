@@ -3,17 +3,6 @@
     "name": "AgentDeck",
     "slug": "agentdeck",
     "version": "0.1.0",
-    "orientation": "portrait",
-    "userInterfaceStyle": "dark",
-    "android": {
-      "package": "com.agentdeck.mobile",
-      "versionCode": 1,
-      "permissions": []
-    },
-    "plugins": [
-      "expo-secure-store",
-      "expo-status-bar"
-    ],
     "extra": {
       "apiUrl": "http://10.0.2.2:8000"
     }

@@ -161,8 +161,14 @@ async def cancel_task(task_id: UUID, user: CurrentUser, db: Db) -> Task:
 async def task_input(task_id: UUID, body: dict, user: CurrentUser, db: Db) -> dict:
     task = await db.scalar(select(Task).where(Task.id == task_id, Task.user_id == user.id))
     text = body.get("text", "")
-    if task is None or not isinstance(text, str) or not text.strip():
-        raise HTTPException(status_code=400, detail="Invalid task or input")
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(status_code=422, detail="Input cannot be empty")
+    if task.state in {TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED}:
+        raise HTTPException(
+            status_code=409, detail="This run has ended; continue using its saved session"
+        )
     sent = await hub.send_device(
         task.device_id,
         Envelope(
@@ -210,7 +216,7 @@ async def decide_approval(
     approval.decided_at = datetime.now(timezone.utc)
     task = await db.get(Task, approval.task_id)
     if task:
-        await hub.send_device(
+        sent = await hub.send_device(
             task.device_id,
             Envelope(
                 type=MessageType.APPROVAL_RESPONSE,
@@ -222,6 +228,8 @@ async def decide_approval(
                 },
             ),
         )
+        if not sent:
+            raise HTTPException(status_code=409, detail="Device is offline")
         record_audit(
             db,
             "approval.decided",

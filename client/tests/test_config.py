@@ -1,7 +1,12 @@
 from uuid import uuid4
 
 import pytest
-from agentdeck.config import ClientConfig, RepoConfig, resolve_allowed_repo
+from agentdeck.config import (
+    ClientConfig,
+    RepoConfig,
+    discover_git_repositories,
+    resolve_allowed_repo,
+)
 
 
 def test_repo_allowlist_accepts_exact_path(tmp_path):
@@ -25,3 +30,12 @@ def test_repo_allowlist_rejects_unknown_and_traversal(tmp_path):
         resolve_allowed_repo(config, uuid4(), str(repo))
     with pytest.raises(PermissionError):
         resolve_allowed_repo(config, item.id, str(other))
+
+
+def test_repository_discovery_finds_git_roots_and_skips_nested_content(tmp_path):
+    first = tmp_path / "group" / "first"
+    second = tmp_path / "second"
+    (first / ".git").mkdir(parents=True)
+    (first / "nested" / ".git").mkdir(parents=True)
+    (second / ".git").mkdir(parents=True)
+    assert discover_git_repositories(tmp_path) == [first.resolve(), second.resolve()]

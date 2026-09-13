@@ -108,6 +108,10 @@ def test_end_to_end_websocket_dispatch_stream_completion(client, account, auth):
     fetched = client.get(f"/api/v1/tasks/{task['id']}", headers=auth).json()
     assert fetched["state"] == "COMPLETED"
     assert fetched["result"]["diff"] == "ok"
+    response = client.post(
+        f"/api/v1/tasks/{task['id']}/input", headers=auth, json={"text": "continue"}
+    )
+    assert response.status_code == 409
 
 
 def test_offline_device_rejected(client, auth):
@@ -151,3 +155,26 @@ def test_repository_cannot_cross_devices(client, auth):
             },
         )
         assert response.status_code == 404
+
+
+def test_removed_repository_disappears_after_device_resync(client, auth):
+    device = register_device(client, auth)
+    repo_id = str(uuid4())
+    with client.websocket_connect(f"/ws/device?token={device['credential']}") as laptop:
+        laptop.send_json(
+            {
+                "type": "hello",
+                "payload": {"repositories": [{"id": repo_id, "name": "old", "path": "/old"}]},
+            }
+        )
+        laptop.receive_json()
+        response = client.get(
+            f"/api/v1/devices/{device['id']}/repositories", headers=auth
+        )
+        assert len(response.json()) == 1
+        laptop.send_json({"type": "hello", "payload": {"repositories": []}})
+        laptop.receive_json()
+        response = client.get(
+            f"/api/v1/devices/{device['id']}/repositories", headers=auth
+        )
+        assert response.json() == []

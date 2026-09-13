@@ -33,8 +33,6 @@ class CodexAdapter(AgentAdapter):
                 "--json",
                 "--sandbox",
                 "workspace-write",
-                "--ask-for-approval",
-                "never",
                 "-C",
                 str(cwd),
                 "-",
@@ -58,7 +56,9 @@ class CodexAdapter(AgentAdapter):
                 if event.get("type") == "thread.started":
                     session_id = event.get("thread_id")
                 content = _event_text(event)
-                yield AgentEvent("agent", content, event, session_id)
+                if content:
+                    stream = "command" if (event.get("item") or {}).get("type") == "command_execution" else "agent"
+                    yield AgentEvent(stream, content, event, session_id)
             except json.JSONDecodeError:
                 yield AgentEvent("stdout", text, agent_session_id=session_id)
         stderr = (await self._process.stderr.read()).decode(errors="replace").strip()
@@ -71,4 +71,8 @@ class CodexAdapter(AgentAdapter):
 
 def _event_text(event: dict) -> str:
     item = event.get("item") or {}
-    return str(item.get("text") or item.get("command") or event.get("message") or "")
+    if item.get("type") == "command_execution":
+        if event.get("type") == "item.started":
+            return str(item.get("command") or "")
+        return str(item.get("aggregated_output") or "")
+    return str(item.get("text") or event.get("message") or "")
