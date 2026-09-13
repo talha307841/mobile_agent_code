@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Keyboard,
   Pressable,
   RefreshControl,
@@ -136,6 +137,10 @@ function Login({ onDone }: { onDone: () => void }) {
   return (
     <SafeAreaView style={s.center}>
       <StatusBar style="light" />
+      <Image
+        source={require("./assets/agentdeck-logo.png")}
+        style={s.brandLogo}
+      />
       <Text style={s.logo}>AgentDeck</Text>
       <Text style={s.tagline}>Your coding agents, wherever you are.</Text>
       <View style={s.card}>
@@ -796,6 +801,7 @@ const s = StyleSheet.create({
   },
   content: { padding: 18, gap: 12 },
   logo: { fontSize: 38, fontWeight: "800", color: colors.primary },
+  brandLogo: { width: 92, height: 92, borderRadius: 22, marginBottom: 14 },
   tagline: { color: colors.muted, fontSize: 16, marginBottom: 28 },
   header: {
     padding: 18,

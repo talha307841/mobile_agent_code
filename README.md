@@ -28,6 +28,8 @@ Create the first mobile account through the app, or use `POST /api/v1/auth/regis
 ```bash
 .venv/bin/agentdeck login --server https://relay.example.com --email you@example.com --name 'Personal laptop' --label Personal
 .venv/bin/agentdeck repo add ~/projects/money-tracker --name money-tracker
+# Or allowlist every Git repository below a directory:
+.venv/bin/agentdeck repo discover ~/Documents
 .venv/bin/agentdeck daemon
 ```
 
@@ -62,4 +64,3 @@ docker compose config
 ```
 
 See [architecture](docs/architecture.md), [protocol](docs/protocol.md), [security](docs/security.md), and [deployment](docs/deployment.md).
-
