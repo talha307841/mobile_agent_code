@@ -138,7 +138,7 @@ function Login({ onDone }: { onDone: () => void }) {
     <SafeAreaView style={s.center}>
       <StatusBar style="light" />
       <Image
-        source={require("./assets/agentdeck-logo.png")}
+        source={require("./assets/agentdeck-logo-v2.png")}
         style={s.brandLogo}
       />
       <Text style={s.logo}>AgentDeck</Text>
@@ -222,7 +222,7 @@ function MachineHeader() {
   );
 }
 
-function Machines() {
+function Machines({ navigation }: any) {
   const { machines, selected, select, reload, loading } =
     useContext(AppContext);
   return (
@@ -264,7 +264,13 @@ function Machines() {
               <Text style={s.stepNumber}>3</Text>
               <Text style={s.stepText}>Start a task from your phone</Text>
             </View>
-            <Button title="Refresh machines" onPress={reload} />
+            <Button
+              title="Open setup guide"
+              onPress={() => navigation.getParent()?.navigate("LaptopSetup")}
+            />
+            <Pressable onPress={reload}>
+              <Text style={s.link}>I finished setup — refresh</Text>
+            </Pressable>
           </View>
         }
         renderItem={({ item }) => (
@@ -477,16 +483,20 @@ function Session({ route, navigation }: any) {
   const taskId = route.params.taskId as string,
     [task, setTask] = useState<Task | null>(null),
     [entries, setEntries] = useState<TaskLog[]>([]),
+    [taskApprovals, setTaskApprovals] = useState<Approval[]>([]),
+    [decidingApproval, setDecidingApproval] = useState<string | null>(null),
     [input, setInput] = useState(""),
     [showDiff, setShowDiff] = useState(false);
   const load = useCallback(async () => {
     try {
-      const [found, logs] = await Promise.all([
+      const [found, logs, approvals] = await Promise.all([
         api.task(taskId),
         api.logs(taskId),
+        api.approvals(),
       ]);
       setTask(found);
       setEntries(logs);
+      setTaskApprovals(approvals.filter((item) => item.task_id === taskId));
     } catch (e) {
       Alert.alert(
         "Could not load run",
@@ -503,6 +513,20 @@ function Session({ route, navigation }: any) {
   }, [load]);
   const isFinished =
     !!task && ["COMPLETED", "FAILED", "CANCELLED"].includes(task.state);
+  const decide = async (approval: Approval, approved: boolean) => {
+    setDecidingApproval(approval.id);
+    try {
+      await api.decideApproval(approval.id, approved);
+      await load();
+    } catch (e) {
+      Alert.alert(
+        "Could not update permission",
+        e instanceof Error ? e.message : String(e),
+      );
+    } finally {
+      setDecidingApproval(null);
+    }
+  };
   const send = async () => {
     if (!task || !input.trim()) return;
     try {
@@ -550,6 +574,35 @@ function Session({ route, navigation }: any) {
           )}
         </View>
         <Text style={s.prompt}>{task?.prompt}</Text>
+        {taskApprovals.map((approval) => (
+          <View key={approval.id} style={s.approvalCard}>
+            <View style={s.row}>
+              <Ionicons name="shield-checkmark-outline" size={22} color={colors.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle}>Permission required</Text>
+                <Text style={s.muted}>
+                  {approval.action.replaceAll("_", " ")}
+                </Text>
+              </View>
+            </View>
+            <Text selectable style={s.approvalDetails}>
+              {JSON.stringify(approval.details, null, 2)}
+            </Text>
+            <View style={s.row}>
+              <Button
+                title="Allow once"
+                disabled={decidingApproval === approval.id}
+                onPress={() => void decide(approval, true)}
+              />
+              <Button
+                danger
+                title="Deny"
+                disabled={decidingApproval === approval.id}
+                onPress={() => void decide(approval, false)}
+              />
+            </View>
+          </View>
+        ))}
         {entries.map((entry) => (
           <RunEntry key={entry.sequence} entry={entry} />
         ))}
@@ -638,21 +691,236 @@ function ApprovalsScreen() {
     </SafeAreaView>
   );
 }
-function Settings({ onLogout }: { onLogout: () => void }) {
+function SettingsRow({
+  icon,
+  title,
+  detail,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  detail: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={s.settingsRow} onPress={onPress}>
+      <View style={s.settingsIcon}>
+        <Ionicons name={icon} size={21} color={colors.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.cardTitle}>{title}</Text>
+        <Text numberOfLines={2} style={s.muted}>
+          {detail}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+    </Pressable>
+  );
+}
+
+function Settings({ onLogout, navigation }: { onLogout: () => void; navigation: any }) {
+  const { selected, machines } = useContext(AppContext);
+  const root = navigation.getParent();
   return (
     <SafeAreaView style={s.page}>
-      <View style={s.content}>
+      <ScrollView contentContainerStyle={s.content}>
         <Text style={s.title}>Settings</Text>
-        <Text style={s.label}>Relay</Text>
-        <Text selectable style={s.card}>
-          {api.getBaseUrl()}
-        </Text>
+        <Text style={s.settingsSection}>SETUP</Text>
+        <View style={s.settingsGroup}>
+          <SettingsRow
+            icon="laptop-outline"
+            title="Connect a laptop"
+            detail="Installation, sign-in, repositories, and service setup"
+            onPress={() => root?.navigate("LaptopSetup")}
+          />
+          <SettingsRow
+            icon="hardware-chip-outline"
+            title="Laptop settings"
+            detail={
+              selected
+                ? `${selected.name} · ${selected.default_agent}`
+                : "Connect a laptop to configure it"
+            }
+            onPress={() =>
+              selected
+                ? root?.navigate("LaptopSettings", { deviceId: selected.id })
+                : root?.navigate("LaptopSetup")
+            }
+          />
+          <SettingsRow
+            icon="folder-open-outline"
+            title="Repository access"
+            detail="Choose which folders AgentDeck is allowed to use"
+            onPress={() => root?.navigate("RepositorySetup")}
+          />
+        </View>
+        <Text style={s.settingsSection}>CONNECTION & SECURITY</Text>
+        <View style={s.settingsGroup}>
+          <View style={s.settingsStaticRow}>
+            <Ionicons name="cloud-outline" size={21} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardTitle}>Relay server</Text>
+              <Text selectable style={s.muted}>{api.getBaseUrl()}</Text>
+            </View>
+          </View>
+          <View style={s.settingsStaticRow}>
+            <Ionicons name="shield-checkmark-outline" size={21} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardTitle}>Protected actions</Text>
+              <Text style={s.muted}>Approval required · allow once only</Text>
+            </View>
+          </View>
+        </View>
+        <Text style={s.settingsSection}>ACCOUNT</Text>
+        <View style={s.settingsGroup}>
+          <View style={s.settingsStaticRow}>
+            <Ionicons name="desktop-outline" size={21} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.cardTitle}>Connected laptops</Text>
+              <Text style={s.muted}>{machines.length} registered</Text>
+            </View>
+          </View>
+        </View>
         <Button
           danger
           title="Sign out"
           onPress={() => api.logout().finally(onLogout)}
         />
-      </View>
+        <Text style={s.version}>AgentDeck 0.1.0</Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const SetupStep = ({ number, title, children }: { number: number; title: string; children: React.ReactNode }) => (
+  <View style={s.setupCard}>
+    <View style={s.row}>
+      <Text style={s.stepNumber}>{number}</Text>
+      <Text style={s.cardTitle}>{title}</Text>
+    </View>
+    {children}
+  </View>
+);
+
+function CommandBlock({ children }: { children: string }) {
+  return <Text selectable style={s.commandBlock}>{children}</Text>;
+}
+
+function LaptopSetup() {
+  return (
+    <SafeAreaView style={s.page} edges={["bottom"]}>
+      <ScrollView contentContainerStyle={s.guideContent}>
+        <View style={s.guideHero}>
+          <Image source={require("./assets/agentdeck-logo-v2.png")} style={s.guideLogo} />
+          <Text style={s.guideTitle}>Connect your laptop</Text>
+          <Text style={s.onboardingText}>
+            Your laptop makes an encrypted outbound connection to the relay. You do not open an SSH port or expose your computer publicly.
+          </Text>
+        </View>
+        <SetupStep number={1} title="Install AgentDeck">
+          <Text style={s.muted}>Open Terminal in the AgentDeck project, then run:</Text>
+          <CommandBlock>./scripts/install-client.sh</CommandBlock>
+        </SetupStep>
+        <SetupStep number={2} title="Register this laptop">
+          <Text style={s.muted}>Use the same relay URL, email, and password as this phone.</Text>
+          <CommandBlock>agentdeck login</CommandBlock>
+        </SetupStep>
+        <SetupStep number={3} title="Add your projects">
+          <Text style={s.muted}>Discover every Git repository inside Documents:</Text>
+          <CommandBlock>agentdeck repo discover ~/Documents</CommandBlock>
+        </SetupStep>
+        <SetupStep number={4} title="Keep it connected">
+          <Text style={s.muted}>Start the background service now and after every login:</Text>
+          <CommandBlock>systemctl --user enable --now agentdeck</CommandBlock>
+        </SetupStep>
+        <View style={s.infoCard}>
+          <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+          <Text style={[s.muted, { flex: 1 }]}>Return to Machines and pull down to refresh. The laptop should show Online.</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function RepositorySetup() {
+  return (
+    <SafeAreaView style={s.page} edges={["bottom"]}>
+      <ScrollView contentContainerStyle={s.guideContent}>
+        <Text style={s.guideTitle}>Repository access</Text>
+        <Text style={s.onboardingText}>
+          Repositories are allowlisted on the laptop so a phone account can never browse arbitrary folders remotely.
+        </Text>
+        <SetupStep number={1} title="Discover a folder">
+          <CommandBlock>agentdeck repo discover ~/Documents</CommandBlock>
+        </SetupStep>
+        <SetupStep number={2} title="Add one repository">
+          <CommandBlock>agentdeck repo add /path/to/project --name project</CommandBlock>
+        </SetupStep>
+        <SetupStep number={3} title="Review or remove access">
+          <CommandBlock>agentdeck repo list</CommandBlock>
+          <CommandBlock>agentdeck repo remove project</CommandBlock>
+        </SetupStep>
+        <SetupStep number={4} title="Sync changes">
+          <CommandBlock>systemctl --user restart agentdeck</CommandBlock>
+        </SetupStep>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function LaptopSettings({ route, navigation }: any) {
+  const deviceId = route.params.deviceId as string;
+  const [device, setDevice] = useState<Device | null>(null),
+    [name, setName] = useState(""),
+    [label, setLabel] = useState<"Work" | "Personal">("Personal"),
+    [agent, setAgent] = useState<"codex" | "claude">("codex"),
+    [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.devices().then((items) => {
+      const found = items.find((item) => item.id === deviceId) || null;
+      setDevice(found);
+      if (found) {
+        setName(found.name);
+        setLabel(found.label);
+        setAgent(found.default_agent);
+      }
+    }).catch((e) => Alert.alert("Could not load laptop", e.message));
+  }, [deviceId]);
+  const save = async () => {
+    try {
+      setBusy(true);
+      setDevice(await api.updateDevice(deviceId, { name: name.trim(), label, default_agent: agent }));
+      Alert.alert("Saved", "Laptop settings have been updated.");
+    } catch (e) {
+      Alert.alert("Could not save", e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const revoke = () => Alert.alert(
+    "Remove this laptop?",
+    "It will lose access immediately and must be registered again to reconnect.",
+    [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: () => api.revokeDevice(deviceId).then(() => navigation.popToTop()) },
+    ],
+  );
+  return (
+    <SafeAreaView style={s.page} edges={["bottom"]}>
+      <ScrollView contentContainerStyle={s.content}>
+        <View style={s.infoCard}>
+          <Ionicons name="laptop-outline" size={28} color={colors.primary} />
+          <View style={{ flex: 1 }}><Text style={s.cardTitle}>{device?.online ? "Online" : "Offline"}</Text><Text style={s.muted}>{device?.last_seen_at ? `Last seen ${new Date(device.last_seen_at).toLocaleString()}` : "Never connected"}</Text></View>
+        </View>
+        <Text style={s.label}>Laptop name</Text>
+        <TextInput value={name} onChangeText={setName} style={s.input} />
+        <Text style={s.section}>Type</Text>
+        <View style={s.row}>{(["Personal", "Work"] as const).map((value) => <Pressable key={value} onPress={() => setLabel(value)} style={[s.choiceCard, label === value && s.choiceActive]}><Ionicons name={value === "Work" ? "briefcase-outline" : "person-outline"} size={20} color={label === value ? colors.primary : colors.muted} /><Text style={s.pillText}>{value}</Text></Pressable>)}</View>
+        <Text style={s.section}>Default coding agent</Text>
+        <View style={s.agentGrid}>{(["codex", "claude"] as const).map((value) => { const available = device?.metadata_json?.agents && Boolean((device.metadata_json.agents as Record<string, unknown>)[value]); return <Pressable key={value} disabled={!available} onPress={() => setAgent(value)} style={[s.agentCard, agent === value && s.choiceActive, !available && s.disabled]}><Text style={s.cardTitle}>{value === "codex" ? "Codex" : "Claude Code"}</Text><Text style={s.tiny}>{available ? "Installed" : "Not detected"}</Text></Pressable>; })}</View>
+        <Button title={busy ? "Saving…" : "Save changes"} disabled={busy || !name.trim()} onPress={save} />
+        <Pressable onPress={revoke}><Text style={s.removeLink}>Remove laptop</Text></Pressable>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -731,7 +999,7 @@ function Main({ onLogout }: { onLogout: () => void }) {
         <Tabs.Screen name="History" component={History} />
         <Tabs.Screen name="Approvals" component={ApprovalsScreen} />
         <Tabs.Screen name="Settings">
-          {() => <Settings onLogout={onLogout} />}
+          {(props) => <Settings {...props} onLogout={onLogout} />}
         </Tabs.Screen>
       </Tabs.Navigator>
     </AppContext.Provider>
@@ -784,6 +1052,21 @@ export default function App() {
               {() => <Main onLogout={() => setAuthenticated(false)} />}
             </Stack.Screen>
             <Stack.Screen name="Session" component={Session} />
+            <Stack.Screen
+              name="LaptopSetup"
+              component={LaptopSetup}
+              options={{ title: "Laptop setup" }}
+            />
+            <Stack.Screen
+              name="RepositorySetup"
+              component={RepositorySetup}
+              options={{ title: "Repositories" }}
+            />
+            <Stack.Screen
+              name="LaptopSettings"
+              component={LaptopSettings}
+              options={{ title: "Laptop settings" }}
+            />
           </>
         )}
       </Stack.Navigator>
@@ -801,7 +1084,7 @@ const s = StyleSheet.create({
   },
   content: { padding: 18, gap: 12 },
   logo: { fontSize: 38, fontWeight: "800", color: colors.primary },
-  brandLogo: { width: 92, height: 92, borderRadius: 22, marginBottom: 14 },
+  brandLogo: { width: 128, height: 104, resizeMode: "contain", marginBottom: 10 },
   tagline: { color: colors.muted, fontSize: 16, marginBottom: 28 },
   header: {
     padding: 18,
@@ -849,6 +1132,103 @@ const s = StyleSheet.create({
     borderRadius: 20,
   },
   selectedCard: { borderWidth: 1, borderColor: colors.primary },
+  settingsSection: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    marginTop: 12,
+  },
+  settingsGroup: {
+    backgroundColor: colors.panel,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  settingsRow: {
+    minHeight: 76,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  settingsStaticRow: {
+    minHeight: 70,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  settingsIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#193B32",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  version: { color: colors.muted, textAlign: "center", fontSize: 11, padding: 8 },
+  guideContent: { padding: 18, paddingBottom: 40, gap: 14 },
+  guideHero: { alignItems: "center", gap: 8, paddingVertical: 8 },
+  guideLogo: { width: 108, height: 86, resizeMode: "contain" },
+  guideTitle: { color: colors.text, fontSize: 25, fontWeight: "800", textAlign: "center" },
+  setupCard: {
+    backgroundColor: colors.panel,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 15,
+    gap: 11,
+  },
+  commandBlock: {
+    color: "#DCE6FF",
+    backgroundColor: "#080C17",
+    borderRadius: 9,
+    padding: 12,
+    fontFamily: "monospace",
+    fontSize: 12,
+  },
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  choiceCard: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.panel,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  choiceActive: { borderColor: colors.primary, backgroundColor: "#142D2A" },
+  agentGrid: { flexDirection: "row", gap: 10 },
+  agentCard: {
+    flex: 1,
+    minHeight: 78,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.panel,
+    padding: 13,
+    justifyContent: "center",
+    gap: 4,
+  },
+  removeLink: { color: colors.danger, textAlign: "center", fontWeight: "700", padding: 14 },
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: "600" },
   label: { color: colors.muted, fontSize: 12, marginTop: 10 },
   input: {
@@ -976,6 +1356,22 @@ const s = StyleSheet.create({
     gap: 12,
     borderRadius: 14,
     backgroundColor: colors.panel,
+  },
+  approvalCard: {
+    padding: 14,
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: colors.panel,
+  },
+  approvalDetails: {
+    color: colors.text,
+    backgroundColor: colors.panel2,
+    borderRadius: 8,
+    padding: 10,
+    fontFamily: "monospace",
+    fontSize: 11,
   },
   smallButton: {
     borderWidth: 1,

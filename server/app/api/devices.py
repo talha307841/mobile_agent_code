@@ -7,7 +7,7 @@ from sqlalchemy import select
 from ..core.security import hash_token, random_token
 from ..dependencies import CurrentUser, Db
 from ..models import Device, Repository
-from ..schemas import DeviceRegister, DeviceRegistration, DeviceView, RepositoryView
+from ..schemas import DeviceRegister, DeviceRegistration, DeviceUpdate, DeviceView, RepositoryView
 from ..services.audit import record_audit
 from ..services.hub import hub
 
@@ -60,6 +60,33 @@ async def list_devices(user: CurrentUser, db: Db) -> list[DeviceView]:
         )
         result.append(DeviceView.model_validate(device).model_copy(update={"online": online}))
     return result
+
+
+@router.patch("/{device_id}", response_model=DeviceView)
+async def update_device(
+    device_id: UUID, body: DeviceUpdate, user: CurrentUser, db: Db
+) -> DeviceView:
+    device = await db.scalar(
+        select(Device).where(
+            Device.id == device_id, Device.user_id == user.id, Device.revoked.is_(False)
+        )
+    )
+    if device is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        if value is not None:
+            setattr(device, field, value)
+    try:
+        await db.flush()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Device name already exists") from None
+    record_audit(db, "device.updated", user_id=user.id, device_id=device.id)
+    await db.commit()
+    await db.refresh(device)
+    return DeviceView.model_validate(device).model_copy(
+        update={"online": hub.device_online(device.id)}
+    )
 
 
 @router.get("/{device_id}/repositories", response_model=list[RepositoryView])

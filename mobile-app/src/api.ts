@@ -130,6 +130,13 @@ export const register = async (email: string, password: string) =>
     }),
   );
 export const devices = () => request<Device[]>("/devices");
+export const updateDevice = (id: string, data: object) =>
+  request<Device>(`/devices/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+export const revokeDevice = (id: string) =>
+  request<void>(`/devices/${id}`, { method: "DELETE" });
 export const repositories = (id: string) =>
   request<Repository[]>(`/devices/${id}/repositories`);
 export const tasks = (deviceId?: string) =>

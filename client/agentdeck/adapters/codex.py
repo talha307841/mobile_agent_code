@@ -6,14 +6,20 @@ import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-from .base import AgentAdapter, AgentEvent
+from .base import AgentAdapter, AgentEvent, SandboxUnavailableError
+
+BWRAP_PERMISSION_ERROR = "bwrap: No permissions to create a new namespace"
 
 
 class CodexAdapter(AgentAdapter):
     name = "codex"
 
     async def run(
-        self, prompt: str, cwd: Path, resume_session_id: str | None = None
+        self,
+        prompt: str,
+        cwd: Path,
+        resume_session_id: str | None = None,
+        sandbox_bypass: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         binary = shutil.which("codex")
         if not binary:
@@ -26,17 +32,15 @@ class CodexAdapter(AgentAdapter):
         )
         if resume_session_id:
             command = [binary, "exec", "resume", resume_session_id, "--json", "-"]
+            if sandbox_bypass:
+                command.insert(-1, "--dangerously-bypass-approvals-and-sandbox")
         else:
-            command = [
-                binary,
-                "exec",
-                "--json",
-                "--sandbox",
-                "workspace-write",
-                "-C",
-                str(cwd),
-                "-",
-            ]
+            command = [binary, "exec", "--json"]
+            if sandbox_bypass:
+                command.append("--dangerously-bypass-approvals-and-sandbox")
+            else:
+                command.extend(["--sandbox", "workspace-write"])
+            command.extend(["-C", str(cwd), "-"])
         self._process = await asyncio.create_subprocess_exec(
             *command,
             cwd=cwd,
@@ -49,6 +53,7 @@ class CodexAdapter(AgentAdapter):
         await self._process.stdin.drain()
         self._process.stdin.close()
         session_id = None
+        sandbox_unavailable = False
         while line := await self._process.stdout.readline():
             text = line.decode(errors="replace").rstrip()
             try:
@@ -56,8 +61,17 @@ class CodexAdapter(AgentAdapter):
                 if event.get("type") == "thread.started":
                     session_id = event.get("thread_id")
                 content = _event_text(event)
+                if BWRAP_PERMISSION_ERROR in content:
+                    sandbox_unavailable = True
+                    continue
+                if sandbox_unavailable:
+                    continue
                 if content:
-                    stream = "command" if (event.get("item") or {}).get("type") == "command_execution" else "agent"
+                    stream = (
+                        "command"
+                        if (event.get("item") or {}).get("type") == "command_execution"
+                        else "agent"
+                    )
                     yield AgentEvent(stream, content, event, session_id)
             except json.JSONDecodeError:
                 yield AgentEvent("stdout", text, agent_session_id=session_id)
@@ -65,6 +79,10 @@ class CodexAdapter(AgentAdapter):
         code = await self._process.wait()
         if stderr:
             yield AgentEvent("stderr", stderr, agent_session_id=session_id)
+        if sandbox_unavailable and not sandbox_bypass:
+            raise SandboxUnavailableError(
+                "Ubuntu blocked Codex's workspace sandbox; explicit one-time permission is required"
+            )
         if code != 0:
             raise RuntimeError(f"Codex exited with status {code}")
 

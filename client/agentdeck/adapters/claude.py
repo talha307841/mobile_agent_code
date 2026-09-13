@@ -13,7 +13,11 @@ class ClaudeCodeAdapter(AgentAdapter):
     name = "claude"
 
     async def run(
-        self, prompt: str, cwd: Path, resume_session_id: str | None = None
+        self,
+        prompt: str,
+        cwd: Path,
+        resume_session_id: str | None = None,
+        sandbox_bypass: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         binary = shutil.which("claude")
         if not binary:

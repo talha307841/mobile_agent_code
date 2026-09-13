@@ -42,6 +42,12 @@ class DeviceRegister(BaseModel):
     default_agent: str = Field(default="codex", pattern="^(codex|claude)$")
 
 
+class DeviceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    label: str | None = Field(default=None, pattern="^(Work|Personal)$")
+    default_agent: str | None = Field(default=None, pattern="^(codex|claude)$")
+
+
 class DeviceRegistration(BaseModel):
     id: UUID
     credential: str

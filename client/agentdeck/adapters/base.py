@@ -16,6 +16,10 @@ class AgentEvent:
     agent_session_id: str | None = None
 
 
+class SandboxUnavailableError(RuntimeError):
+    """The OS prevented the agent's requested execution sandbox from starting."""
+
+
 class AgentAdapter(ABC):
     name: str
 
@@ -24,7 +28,11 @@ class AgentAdapter(ABC):
 
     @abstractmethod
     async def run(
-        self, prompt: str, cwd: Path, resume_session_id: str | None = None
+        self,
+        prompt: str,
+        cwd: Path,
+        resume_session_id: str | None = None,
+        sandbox_bypass: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         yield AgentEvent("system")
 

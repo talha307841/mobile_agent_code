@@ -14,6 +14,7 @@ from agentdeck_protocol import Envelope, MessageType, TaskState
 from websockets import ClientConnection
 
 from .adapters import AgentAdapter, create_adapter
+from .adapters.base import SandboxUnavailableError
 from .config import ClientConfig, load_config, load_credential, resolve_allowed_repo
 from .state import Outbox
 
@@ -231,7 +232,12 @@ class Daemon:
             sequence += 1
             prompt = payload["prompt"]
             while True:
-                async for event in adapter.run(prompt, repo, session_id):
+                async for event in adapter.run(
+                    prompt,
+                    repo,
+                    session_id,
+                    sandbox_bypass=bool(payload.get("sandbox_bypass")),
+                ):
                     session_id = event.agent_session_id or session_id
                     await self._event(task_id, sequence, None, event.text, event.stream, event.raw)
                     sequence += 1
@@ -242,6 +248,27 @@ class Daemon:
             result = await git_snapshot(repo)
             await self._result(
                 task_id, TaskState.COMPLETED, result=result, agent_session_id=session_id
+            )
+        except SandboxUnavailableError:
+            payload["sandbox_bypass"] = True
+            payload["resume_agent_session_id"] = None
+            self.pending_approvals[task_id] = payload
+            await self.send(
+                Envelope(
+                    type=MessageType.APPROVAL_REQUEST,
+                    payload={
+                        "task_id": task_id,
+                        "action": "run_without_linux_sandbox",
+                        "details": {
+                            "reason": "Ubuntu blocked Codex's Bubblewrap sandbox",
+                            "scope": "This task only",
+                            "warning": (
+                                "The agent process can access files available to your user account. "
+                                "Only allow this for a repository you trust."
+                            ),
+                        },
+                    },
+                )
             )
         except asyncio.CancelledError:
             await self._result(task_id, TaskState.CANCELLED, agent_session_id=session_id)

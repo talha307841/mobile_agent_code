@@ -27,6 +27,19 @@ def test_device_isolation(client, account, auth):
     assert [item["id"] for item in devices] == [own["id"]]
 
 
+def test_device_settings_can_be_updated(client, auth):
+    device = register_device(client, auth)
+    response = client.patch(
+        f"/api/v1/devices/{device['id']}",
+        headers=auth,
+        json={"name": "Studio laptop", "label": "Work", "default_agent": "claude"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["name"] == "Studio laptop"
+    assert response.json()["label"] == "Work"
+    assert response.json()["default_agent"] == "claude"
+
+
 def test_end_to_end_websocket_dispatch_stream_completion(client, account, auth):
     device = register_device(client, auth)
     repo_id = str(uuid4())
@@ -168,13 +181,9 @@ def test_removed_repository_disappears_after_device_resync(client, auth):
             }
         )
         laptop.receive_json()
-        response = client.get(
-            f"/api/v1/devices/{device['id']}/repositories", headers=auth
-        )
+        response = client.get(f"/api/v1/devices/{device['id']}/repositories", headers=auth)
         assert len(response.json()) == 1
         laptop.send_json({"type": "hello", "payload": {"repositories": []}})
         laptop.receive_json()
-        response = client.get(
-            f"/api/v1/devices/{device['id']}/repositories", headers=auth
-        )
+        response = client.get(f"/api/v1/devices/{device['id']}/repositories", headers=auth)
         assert response.json() == []

@@ -2,6 +2,7 @@ import asyncio
 from uuid import uuid4
 
 import pytest
+from agentdeck.adapters.base import SandboxUnavailableError
 from agentdeck.config import ClientConfig, RepoConfig
 from agentdeck.daemon import Daemon, reconnect_delay
 from agentdeck.state import Outbox
@@ -59,3 +60,35 @@ async def test_cancellation_stops_task(tmp_path):
 def test_reconnect_backoff_is_exponential_and_capped():
     assert [reconnect_delay(i) for i in range(4)] == [1, 2, 4, 8]
     assert reconnect_delay(20) == 60
+
+
+@pytest.mark.asyncio
+async def test_unavailable_os_sandbox_requests_one_time_approval(tmp_path):
+    class BlockedAdapter:
+        async def run(self, *args, **kwargs):
+            raise SandboxUnavailableError("blocked")
+            yield
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    repo = RepoConfig(name="repo", path=str(repo_path))
+    daemon = Daemon(ClientConfig(repositories=[repo]), "credential", Outbox(tmp_path / "outbox.db"))
+    sent = []
+
+    async def capture(message, persist=True):
+        sent.append(message)
+
+    daemon.send = capture
+    task_id = str(uuid4())
+    payload = {
+        "task_id": task_id,
+        "repository_id": str(repo.id),
+        "repository_path": str(repo_path),
+        "prompt": "read the latest commit",
+        "agent": "codex",
+    }
+    await daemon._execute(payload, BlockedAdapter())
+
+    request = next(message for message in sent if message.type == MessageType.APPROVAL_REQUEST)
+    assert request.payload["action"] == "run_without_linux_sandbox"
+    assert daemon.pending_approvals[task_id]["sandbox_bypass"] is True

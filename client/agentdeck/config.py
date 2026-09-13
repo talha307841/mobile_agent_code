@@ -89,5 +89,7 @@ def discover_git_repositories(root: Path) -> list[Path]:
             found.append(Path(current).resolve())
             directories.clear()
             continue
-        directories[:] = [name for name in directories if name not in ignored and not name.startswith(".")]
+        directories[:] = [
+            name for name in directories if name not in ignored and not name.startswith(".")
+        ]
     return sorted(found)
