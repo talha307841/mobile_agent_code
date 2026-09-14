@@ -15,6 +15,30 @@ AgentDeck securely controls Codex and Claude Code sessions on allowlisted laptop
 
 Requirements: Python 3.10+, Docker, Node 22+ for mobile development, and an authenticated Codex and/or Claude Code CLI on each laptop.
 
+### One-command laptop setup
+
+On Linux with systemd, the easiest setup is:
+
+```bash
+./setup.sh
+```
+
+The installer asks only for the account email/password, laptop name, and folder
+containing Git projects. It installs all Python dependencies, downloads the
+official Cloudflare Tunnel client, creates the account, discovers repositories,
+and installs a background service. At the end it prints the HTTPS URL to enter
+in the phone app. Show the current URL again at any time with:
+
+```bash
+~/.local/bin/agentdeck-url
+```
+
+The service restarts automatically after logout or reboot. This free setup uses
+a Cloudflare Quick Tunnel, so its URL can change after a restart; run
+`agentdeck-url` and update the app if that happens. The laptop must be powered
+on and online. A permanent URL that remains reachable while the laptop is off
+requires deploying the relay to an always-on host with a named domain/tunnel.
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'

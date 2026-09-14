@@ -127,6 +127,38 @@ def test_end_to_end_websocket_dispatch_stream_completion(client, account, auth):
     assert response.status_code == 409
 
 
+def test_heartbeat_preserves_reported_agent_capabilities(client, auth):
+    device = register_device(client, auth)
+    with client.websocket_connect(f"/ws/device?token={device['credential']}") as laptop:
+        laptop.send_json(
+            {
+                "type": "hello",
+                "payload": {
+                    "repositories": [],
+                    "metadata": {
+                        "hostname": "studio",
+                        "agents": {"codex": True, "claude": False},
+                    },
+                },
+            }
+        )
+        assert laptop.receive_json()["type"] == "ack"
+        laptop.send_json(
+            {
+                "type": "heartbeat",
+                "payload": {"hostname": "studio", "running_tasks": []},
+            }
+        )
+        assert laptop.receive_json()["type"] == "heartbeat.ack"
+
+        listed = client.get("/api/v1/devices", headers=auth).json()
+        assert listed[0]["metadata_json"] == {
+            "hostname": "studio",
+            "agents": {"codex": True, "claude": False},
+            "running_tasks": [],
+        }
+
+
 def test_offline_device_rejected(client, auth):
     device = register_device(client, auth)
     response = client.post(

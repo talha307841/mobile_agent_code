@@ -70,7 +70,10 @@ async def _handle_device_message(device_id: UUID, user_id: UUID, envelope: Envel
             return
         device.last_seen_at = datetime.now(timezone.utc)
         if envelope.type == MessageType.HEARTBEAT:
-            device.metadata_json = envelope.payload
+            # Heartbeats contain changing runtime state, while HELLO contains
+            # capabilities such as the installed coding agents. Preserve those
+            # capabilities instead of replacing all metadata every 15 seconds.
+            device.metadata_json = {**(device.metadata_json or {}), **envelope.payload}
             await db.commit()
             await hub.send_device(
                 device_id, Envelope(type=MessageType.HEARTBEAT_ACK, reply_to=envelope.id)
