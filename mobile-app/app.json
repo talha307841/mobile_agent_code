@@ -3,6 +3,19 @@
     "name": "AgentDeck",
     "slug": "agentdeck",
     "version": "0.1.0",
+    "icon": "./assets/agentdeck-logo-v3.png",
+    "splash": {
+      "image": "./assets/agentdeck-logo-v3.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#090A0C"
+    },
+    "android": {
+      "icon": "./assets/agentdeck-logo-v3.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/agentdeck-logo-v3.png",
+        "backgroundColor": "#090A0C"
+      }
+    },
     "extra": {
       "apiUrl": "http://10.0.2.2:8000"
     }

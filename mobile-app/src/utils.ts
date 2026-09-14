@@ -1,8 +1,8 @@
 import {colors} from './theme';
 
 export function taskStateColor(state: string): string {
-  if (state === 'COMPLETED') return colors.primary;
+  if (state === 'COMPLETED') return colors.success;
   if (state === 'FAILED' || state === 'CANCELLED') return colors.danger;
-  return colors.warning;
+  if (state === 'QUEUED' || state === 'STARTING') return colors.warning;
+  return colors.cyan;
 }
-

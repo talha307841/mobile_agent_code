@@ -48,20 +48,33 @@ const Button = ({
   title,
   onPress,
   danger,
+  secondary,
+  icon,
   disabled,
 }: {
   title: string;
   onPress: () => void;
   danger?: boolean;
+  secondary?: boolean;
+  icon?: keyof typeof Ionicons.glyphMap;
   disabled?: boolean;
 }) => (
   <Pressable
     disabled={disabled}
     onPress={onPress}
-    style={[s.button, danger && s.danger, disabled && s.disabled]}
+    style={[s.button, secondary && s.secondaryButton, danger && s.danger, disabled && s.disabled]}
   >
-    <Text style={s.buttonText}>{title}</Text>
+    {icon && <Ionicons name={icon} size={18} color={danger || !secondary ? colors.bg : colors.text} />}
+    <Text style={[s.buttonText, secondary && s.secondaryButtonText]}>{title}</Text>
   </Pressable>
+);
+const Brand = ({ compact = false }: { compact?: boolean }) => (
+  <View style={s.brandRow}>
+    <Image source={require("./assets/agentdeck-logo-v3.png")} style={compact ? s.brandMarkSmall : s.brandMark} />
+    <Text style={compact ? s.brandNameSmall : s.brandName}>
+      Agent<Text style={s.brandAccent}>Deck</Text>
+    </Text>
+  </View>
 );
 const Empty = ({ children }: { children: React.ReactNode }) => (
   <View style={s.empty}>
@@ -137,12 +150,8 @@ function Login({ onDone }: { onDone: () => void }) {
   return (
     <SafeAreaView style={s.center}>
       <StatusBar style="light" />
-      <Image
-        source={require("./assets/agentdeck-logo-v2.png")}
-        style={s.brandLogo}
-      />
-      <Text style={s.logo}>AgentDeck</Text>
-      <Text style={s.tagline}>Your coding agents, wherever you are.</Text>
+      <Brand />
+      <Text style={s.tagline}>Your coding agents. On your machines. In your hands.</Text>
       <View style={s.card}>
         <Text style={s.label}>Relay server</Text>
         <TextInput
@@ -190,34 +199,35 @@ function MachineHeader() {
     useContext(AppContext);
   return (
     <View style={s.header}>
-      <View>
-        <Text style={s.eyebrow}>MACHINE</Text>
-        <Text style={s.title}>{selected?.name || "No laptop registered"}</Text>
+      <View style={s.between}>
+        <Brand compact />
+        <View style={[s.liveBadge, !live && s.liveBadgeOffline]}>
+          <View style={[s.dot, { backgroundColor: live ? colors.success : colors.warning }]} />
+          <Text style={s.liveText}>{live ? "Live" : "Connecting"}</Text>
+        </View>
       </View>
-      <View style={s.row}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.machineChips}>
         {machines.map((machine) => (
           <Pressable
             key={machine.id}
             onPress={() => select(machine)}
-            style={[s.pill, selected?.id === machine.id && s.pillActive]}
+            style={[s.machineChip, selected?.id === machine.id && s.machineChipActive]}
           >
             <View
               style={[
                 s.dot,
                 {
                   backgroundColor: machine.online
-                    ? colors.primary
+                    ? colors.success
                     : colors.muted,
                 },
               ]}
             />
-            <Text style={s.pillText}>{machine.label}</Text>
+            <Text numberOfLines={1} style={s.machineChipText}>{machine.name}</Text>
           </Pressable>
         ))}
-      </View>
-      <Text style={[s.tiny, connectionError && s.error]}>
-        {connectionError || (live ? "Live connection" : "Reconnecting…")}
-      </Text>
+      </ScrollView>
+      {connectionError && <Text style={s.error}>{connectionError}</Text>}
     </View>
   );
 }
@@ -225,6 +235,18 @@ function MachineHeader() {
 function Machines({ navigation }: any) {
   const { machines, selected, select, reload, loading } =
     useContext(AppContext);
+  const [recent, setRecent] = useState<Task[]>([]);
+  const [pending, setPending] = useState<Approval[]>([]);
+  const loadDashboard = useCallback(async () => {
+    if (!selected) { setRecent([]); setPending([]); return; }
+    try {
+      const [tasks, approvals] = await Promise.all([api.tasks(selected.id), api.approvals()]);
+      setRecent(tasks.slice(0, 4));
+      setPending(approvals.filter((item) => item.status === "PENDING" || item.status === "pending"));
+    } catch {}
+  }, [selected?.id]);
+  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
+  const refresh = async () => { await reload(); await loadDashboard(); };
   return (
     <SafeAreaView style={s.page}>
       <MachineHeader />
@@ -233,7 +255,7 @@ function Machines({ navigation }: any) {
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={reload}
+            onRefresh={refresh}
             tintColor={colors.primary}
           />
         }
@@ -273,53 +295,28 @@ function Machines({ navigation }: any) {
             </Pressable>
           </View>
         }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => select(item)}
-            style={[s.machineCard, selected?.id === item.id && s.selectedCard]}
-          >
-            <View style={s.machineTop}>
-              <View style={s.machineGlyph}>
-                <Ionicons
-                  name="laptop-outline"
-                  size={25}
-                  color={colors.primary}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle}>{item.name}</Text>
-                <Text style={s.muted}>
-                  {item.label} · {item.default_agent}
-                </Text>
-              </View>
-              <View
-                style={[
-                  s.statusBadge,
-                  { backgroundColor: item.online ? "#193B32" : "#282F43" },
-                ]}
-              >
-                <View
-                  style={[
-                    s.dot,
-                    {
-                      backgroundColor: item.online
-                        ? colors.primary
-                        : colors.muted,
-                    },
-                  ]}
-                />
-                <Text
-                  style={{
-                    color: item.online ? colors.primary : colors.muted,
-                    fontSize: 12,
-                  }}
-                >
-                  {item.online ? "Online" : "Offline"}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
-        )}
+        ListHeaderComponent={machines.length ? <View style={s.dashboard}>
+          <Text style={s.heroTitle}>Your agents are ready.</Text>
+          {selected && <Pressable onPress={() => navigation.getParent()?.navigate("LaptopSettings", { deviceId: selected.id })} style={s.machineCard}>
+            <View style={s.machineGlyph}><Ionicons name="laptop-outline" size={25} color={colors.primary} /></View>
+            <View style={{ flex: 1 }}><Text style={s.cardTitle}>{selected.name}</Text><Text style={s.muted}>{selected.label} · {selected.default_agent === "codex" ? "Codex" : "Claude Code"} ready</Text></View>
+            <View style={s.statusBadge}><View style={[s.dot, { backgroundColor: selected.online ? colors.success : colors.muted }]} /><Text style={[s.statusText, { color: selected.online ? colors.success : colors.muted }]}>{selected.online ? "Online" : "Offline"}</Text></View>
+            <Ionicons name="chevron-forward" size={19} color={colors.muted} />
+          </Pressable>}
+          <Button icon="play" title="Start a run" onPress={() => navigation.navigate("Run")} disabled={!selected?.online} />
+          {!!pending.length && <Pressable style={s.attentionCard} onPress={() => navigation.navigate("Activity")}>
+            <View style={s.attentionIcon}><Ionicons name="shield-checkmark" size={22} color={colors.warning} /></View>
+            <View style={{ flex: 1 }}><Text style={s.attentionTitle}>{pending.length} permission {pending.length === 1 ? "request" : "requests"}</Text><Text style={s.muted}>Needs your review to continue</Text></View>
+            <Ionicons name="chevron-forward" size={20} color={colors.warning} />
+          </Pressable>}
+          <View style={s.sectionHeader}><Text style={s.section}>Recent tasks</Text><Pressable onPress={() => navigation.navigate("Activity")}><Text style={s.linkInline}>View all</Text></Pressable></View>
+          <View style={s.listCard}>{recent.length ? recent.map((task) => <Pressable key={task.id} style={s.taskRow} onPress={() => navigation.getParent()?.navigate("Session", { taskId: task.id })}>
+            <View style={[s.stateIcon, { backgroundColor: `${stateColor(task.state)}22` }]}><Ionicons name={task.state === "COMPLETED" ? "checkmark" : task.state === "FAILED" ? "close" : "sync"} size={18} color={stateColor(task.state)} /></View>
+            <View style={{ flex: 1 }}><Text numberOfLines={1} style={s.taskTitle}>{task.prompt}</Text><Text style={s.tiny}>{task.state.replaceAll("_", " ")} · {new Date(task.updated_at).toLocaleString()}</Text></View>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </Pressable>) : <Empty>No tasks yet. Start your first run.</Empty>}</View>
+        </View> : null}
+        renderItem={() => null}
       />
     </SafeAreaView>
   );
@@ -373,6 +370,13 @@ function NewTask({ navigation }: any) {
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
       >
+        <Text style={s.screenTitle}>New run</Text>
+        <Text style={s.screenSubtitle}>Tell your agent what to work on.</Text>
+        <Text style={s.section}>Target machine</Text>
+        {selected && <View style={s.selectorCard}>
+          <Ionicons name="laptop-outline" size={22} color={colors.primary} />
+          <View style={{ flex: 1 }}><Text style={s.cardTitle}>{selected.name}</Text><Text style={[s.tiny, { color: selected.online ? colors.success : colors.warning }]}>{selected.online ? "●  Online" : "○  Offline"}</Text></View>
+        </View>}
         <Text style={s.section}>Repository</Text>
         {loadingRepos ? (
           <ActivityIndicator color={colors.primary} />
@@ -382,9 +386,11 @@ function NewTask({ navigation }: any) {
               <Pressable
                 key={item.id}
                 onPress={() => setRepo(item)}
-                style={[s.pill, repo?.id === item.id && s.pillActive]}
+                style={[s.repoCard, repo?.id === item.id && s.choiceActive]}
               >
-                <Text style={s.pillText}>{item.name}</Text>
+                <Ionicons name="folder-outline" size={19} color={repo?.id === item.id ? colors.primary : colors.muted} />
+                <View style={{ flex: 1 }}><Text style={s.pillText}>{item.name}</Text><Text numberOfLines={1} style={s.tiny}>{item.path}</Text></View>
+                {repo?.id === item.id && <Ionicons name="checkmark-circle" size={19} color={colors.primary} />}
               </Pressable>
             ))}
           </View>
@@ -400,16 +406,20 @@ function NewTask({ navigation }: any) {
           multiline
           value={prompt}
           onChangeText={setPrompt}
-          placeholder="Inspect failing tests, fix the issue, and verify the result."
+          placeholder="Describe the work in natural language…"
           placeholderTextColor={colors.muted}
           style={[s.input, s.composer]}
         />
+        <Text style={s.counter}>{prompt.length} / 4000</Text>
+        <Text style={s.fieldHint}>Quick prompts</Text>
+        <View style={s.quickGrid}>{["Fix a bug", "Add a feature", "Refactor code", "Add tests"].map((value, index) => <Pressable key={value} style={s.quickPrompt} onPress={() => setPrompt(value === "Fix a bug" ? "Investigate and fix " : `${value}: `)}><Ionicons name={(["build-outline", "sparkles-outline", "git-branch-outline", "flask-outline"] as const)[index]} size={17} color={colors.primary} /><Text style={s.quickText}>{value}</Text></Pressable>)}</View>
         {selected && !selected.online && (
           <Text style={s.error}>
             This laptop is offline. Start agentdeck daemon on it.
           </Text>
         )}
         <Button
+          icon="play"
           title={
             busy
               ? "Dispatching…"
@@ -423,9 +433,10 @@ function NewTask({ navigation }: any) {
   );
 }
 
-function History({ navigation }: any) {
+function Activity({ navigation }: any) {
   const { selected } = useContext(AppContext);
   const [items, setItems] = useState<Task[]>([]),
+    [approvals, setApprovals] = useState<Approval[]>([]),
     [loading, setLoading] = useState(false);
   const load = useCallback(async () => {
     if (!selected) {
@@ -434,7 +445,9 @@ function History({ navigation }: any) {
     }
     setLoading(true);
     try {
-      setItems(await api.tasks(selected.id));
+      const [tasks, pending] = await Promise.all([api.tasks(selected.id), api.approvals()]);
+      setItems(tasks);
+      setApprovals(pending.filter((item) => item.status === "PENDING" || item.status === "pending"));
     } catch (e) {
       Alert.alert(
         "Could not load history",
@@ -450,24 +463,31 @@ function History({ navigation }: any) {
   return (
     <SafeAreaView style={s.page}>
       <MachineHeader />
+      <View style={s.activityHeading}><Text style={s.screenTitle}>Activity</Text><Text style={s.screenSubtitle}>Runs and permission requests</Text></View>
       <FlatList
         data={items}
         onRefresh={load}
         refreshing={loading}
         keyExtractor={(x) => x.id}
-        ListEmptyComponent={<Empty>No task history yet.</Empty>}
+        ListHeaderComponent={approvals.length ? <View style={s.approvalsSection}>
+          <Text style={s.settingsSection}>NEEDS ATTENTION</Text>
+          {approvals.map((item) => <View key={item.id} style={s.approvalCard}>
+            <View style={s.row}><Ionicons name="shield-checkmark" size={22} color={colors.warning} /><View style={{ flex: 1 }}><Text style={s.cardTitle}>{item.action.replaceAll("_", " ")}</Text><Text numberOfLines={2} style={s.muted}>{JSON.stringify(item.details)}</Text></View></View>
+            <View style={s.actionRow}><Button secondary danger title="Deny" onPress={() => api.decideApproval(item.id, false).then(load)} /><Button title="Allow once" onPress={() => api.decideApproval(item.id, true).then(load)} /></View>
+          </View>)}
+          <Text style={s.settingsSection}>ALL RUNS</Text>
+        </View> : null}
+        ListEmptyComponent={<Empty>No activity yet.</Empty>}
         renderItem={({ item }) => (
           <Pressable
-            style={s.card}
+            style={s.activityCard}
             onPress={() => navigation.navigate("Session", { taskId: item.id })}
           >
             <View style={s.between}>
               <Text numberOfLines={2} style={[s.cardTitle, { flex: 1 }]}>
                 {item.prompt}
               </Text>
-              <Text style={{ color: stateColor(item.state) }}>
-                {item.state}
-              </Text>
+              <View style={[s.stateBadge, { backgroundColor: `${stateColor(item.state)}22` }]}><Text style={[s.stateBadgeText, { color: stateColor(item.state) }]}>{item.state}</Text></View>
             </View>
             <Text style={s.tiny}>
               {new Date(item.created_at).toLocaleString()}
@@ -554,14 +574,11 @@ function Session({ route, navigation }: any) {
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={s.between}>
-          <Text
-            style={[s.title, { color: stateColor(task?.state || "QUEUED") }]}
-          >
-            {task?.state || "Loading…"}
-          </Text>
+        <View style={s.sessionHeader}>
+          <View style={{ flex: 1 }}><Text numberOfLines={2} style={s.screenTitle}>{task?.prompt || "Loading run…"}</Text><Text style={s.screenSubtitle}>Live agent session</Text></View>
           {task && !isFinished && (
             <Button
+              secondary
               danger
               title="Stop"
               onPress={() =>
@@ -573,7 +590,11 @@ function Session({ route, navigation }: any) {
             />
           )}
         </View>
-        <Text style={s.prompt}>{task?.prompt}</Text>
+        <View style={s.progressCard}>
+          <View style={[s.progressRing, { borderColor: stateColor(task?.state || "QUEUED") }]}><Ionicons name={isFinished ? "checkmark" : "sync"} size={20} color={stateColor(task?.state || "QUEUED")} /></View>
+          <View style={{ flex: 1 }}><Text style={s.cardTitle}>{task?.state?.replaceAll("_", " ") || "Loading…"}</Text><Text style={s.muted}>{isFinished ? "Run finished" : "Agent is working on your machine"}</Text></View>
+          <View style={[s.stateBadge, { backgroundColor: `${stateColor(task?.state || "QUEUED")}22` }]}><Text style={[s.stateBadgeText, { color: stateColor(task?.state || "QUEUED") }]}>LIVE</Text></View>
+        </View>
         {taskApprovals.map((approval) => (
           <View key={approval.id} style={s.approvalCard}>
             <View style={s.row}>
@@ -588,14 +609,15 @@ function Session({ route, navigation }: any) {
             <Text selectable style={s.approvalDetails}>
               {JSON.stringify(approval.details, null, 2)}
             </Text>
-            <View style={s.row}>
+            <View style={s.actionRow}>
               <Button
+                secondary
                 title="Allow once"
                 disabled={decidingApproval === approval.id}
                 onPress={() => void decide(approval, true)}
               />
               <Button
-                danger
+                secondary danger
                 title="Deny"
                 disabled={decidingApproval === approval.id}
                 onPress={() => void decide(approval, false)}
@@ -645,6 +667,7 @@ function Session({ route, navigation }: any) {
         />
         <Button
           disabled={!input.trim() || !task}
+          icon="send"
           title={isFinished ? "Start continuation" : "Send to active run"}
           onPress={send}
         />
@@ -811,7 +834,7 @@ function LaptopSetup() {
     <SafeAreaView style={s.page} edges={["bottom"]}>
       <ScrollView contentContainerStyle={s.guideContent}>
         <View style={s.guideHero}>
-          <Image source={require("./assets/agentdeck-logo-v2.png")} style={s.guideLogo} />
+          <Image source={require("./assets/agentdeck-logo-v3.png")} style={s.guideLogo} />
           <Text style={s.guideTitle}>Connect your laptop</Text>
           <Text style={s.onboardingText}>
             Your laptop makes an encrypted outbound connection to the relay. You do not open an SSH port or expose your computer publicly.
@@ -964,10 +987,9 @@ function Main({ onLogout }: { onLogout: () => void }) {
     [machines, selected, reload, live, loading, connectionError],
   );
   const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
-    Machines: "laptop-outline",
-    Task: "add-circle-outline",
-    History: "time-outline",
-    Approvals: "shield-checkmark-outline",
+    Home: "home-outline",
+    Run: "add-outline",
+    Activity: "list-outline",
     Settings: "settings-outline",
   };
   return (
@@ -983,21 +1005,21 @@ function Main({ onLogout }: { onLogout: () => void }) {
             />
           ),
           tabBarStyle: {
-            backgroundColor: colors.panel,
+            backgroundColor: "#0E1013",
             borderTopColor: colors.border,
-            height: 72,
-            paddingTop: 8,
-            paddingBottom: 10,
+            height: 70,
+            paddingTop: 7,
+            paddingBottom: 9,
           },
+          tabBarItemStyle: { minHeight: 52 },
           tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.muted,
         })}
       >
-        <Tabs.Screen name="Machines" component={Machines} />
-        <Tabs.Screen name="Task" component={NewTask} />
-        <Tabs.Screen name="History" component={History} />
-        <Tabs.Screen name="Approvals" component={ApprovalsScreen} />
+        <Tabs.Screen name="Home" component={Machines} />
+        <Tabs.Screen name="Run" component={NewTask} />
+        <Tabs.Screen name="Activity" component={Activity} />
         <Tabs.Screen name="Settings">
           {(props) => <Settings {...props} onLogout={onLogout} />}
         </Tabs.Screen>
@@ -1082,18 +1104,27 @@ const s = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  content: { padding: 18, gap: 12 },
-  logo: { fontSize: 38, fontWeight: "800", color: colors.primary },
-  brandLogo: { width: 128, height: 104, resizeMode: "contain", marginBottom: 10 },
-  tagline: { color: colors.muted, fontSize: 16, marginBottom: 28 },
+  content: { padding: 18, paddingBottom: 36, gap: 12 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  brandMark: { width: 64, height: 64, resizeMode: "contain" },
+  brandMarkSmall: { width: 31, height: 31, resizeMode: "contain" },
+  brandName: { fontSize: 34, fontWeight: "800", color: colors.text, letterSpacing: -1.2 },
+  brandNameSmall: { fontSize: 22, fontWeight: "800", color: colors.text, letterSpacing: -0.7 },
+  brandAccent: { color: colors.primary },
+  tagline: { color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 10, marginBottom: 22 },
   header: {
-    padding: 18,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: 9,
+    gap: 10,
   },
   eyebrow: { fontSize: 10, letterSpacing: 2, color: colors.muted },
-  title: { fontSize: 24, fontWeight: "700", color: colors.text },
+  title: { fontSize: 24, fontWeight: "800", color: colors.text },
+  screenTitle: { fontSize: 26, lineHeight: 31, fontWeight: "800", color: colors.text, letterSpacing: -0.5 },
+  screenSubtitle: { color: colors.muted, fontSize: 14, marginTop: 2 },
+  heroTitle: { fontSize: 25, fontWeight: "800", color: colors.text, letterSpacing: -0.5, marginBottom: 2 },
   section: {
     fontSize: 17,
     fontWeight: "700",
@@ -1101,25 +1132,30 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   card: {
-    margin: 10,
+    marginHorizontal: 16,
+    marginTop: 10,
     padding: 16,
     borderRadius: 14,
     backgroundColor: colors.panel,
     gap: 8,
   },
   machineCard: {
-    marginHorizontal: 16,
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 16,
+    minHeight: 76,
+    padding: 14,
+    borderRadius: 14,
     backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   machineTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   machineGlyph: {
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: "#193B32",
+    backgroundColor: "#262032",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1127,10 +1163,18 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 20,
   },
+  statusText: { fontSize: 12, fontWeight: "700" },
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#153024", minHeight: 36, paddingHorizontal: 11, borderRadius: 18 },
+  liveBadgeOffline: { backgroundColor: "#332A16" },
+  liveText: { color: colors.text, fontSize: 12, fontWeight: "700" },
+  machineChips: { gap: 8, paddingRight: 18 },
+  machineChip: { minHeight: 38, maxWidth: 180, paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 7 },
+  machineChipActive: { borderColor: colors.primary, backgroundColor: "#211B2D" },
+  machineChipText: { color: colors.text, fontSize: 12, fontWeight: "600", flexShrink: 1 },
   selectedCard: { borderWidth: 1, borderColor: colors.primary },
   settingsSection: {
     color: colors.muted,
@@ -1168,7 +1212,7 @@ const s = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#193B32",
+    backgroundColor: "#262032",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1215,7 +1259,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  choiceActive: { borderColor: colors.primary, backgroundColor: "#142D2A" },
+  choiceActive: { borderColor: colors.primary, backgroundColor: "#211B2D" },
   agentGrid: { flexDirection: "row", gap: 10 },
   agentCard: {
     flex: 1,
@@ -1232,22 +1276,30 @@ const s = StyleSheet.create({
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: "600" },
   label: { color: colors.muted, fontSize: 12, marginTop: 10 },
   input: {
-    backgroundColor: colors.panel2,
+    minHeight: 50,
+    backgroundColor: colors.panel,
     borderWidth: 1,
     borderColor: colors.border,
     color: colors.text,
     padding: 13,
-    borderRadius: 10,
+    borderRadius: 12,
+    fontSize: 15,
   },
-  composer: { height: 180, textAlignVertical: "top" },
+  composer: { height: 180, textAlignVertical: "top", fontFamily: "monospace", lineHeight: 22 },
   button: {
+    minHeight: 50,
     backgroundColor: colors.primary,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
   },
   danger: { backgroundColor: colors.danger },
+  secondaryButton: { backgroundColor: colors.panel2, borderWidth: 1, borderColor: colors.border },
+  secondaryButtonText: { color: colors.text },
   disabled: { opacity: 0.4 },
   buttonText: { color: colors.bg, fontWeight: "800" },
   link: { color: colors.primary, textAlign: "center", padding: 12 },
@@ -1259,6 +1311,32 @@ const s = StyleSheet.create({
     gap: 10,
   },
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  dashboard: { padding: 18, paddingBottom: 34, gap: 14 },
+  attentionCard: { minHeight: 76, flexDirection: "row", alignItems: "center", gap: 12, padding: 14, backgroundColor: "#271E0E", borderWidth: 1, borderColor: "#654716", borderRadius: 14 },
+  attentionIcon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#392A10" },
+  attentionTitle: { color: colors.warning, fontSize: 15, fontWeight: "800" },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 },
+  linkInline: { color: colors.primary, fontSize: 13, fontWeight: "700", padding: 10 },
+  listCard: { backgroundColor: colors.panel, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  taskRow: { minHeight: 68, paddingHorizontal: 13, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  taskTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  stateIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  selectorCard: { minHeight: 68, padding: 13, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderRadius: 13, flexDirection: "row", alignItems: "center", gap: 12 },
+  repoCard: { width: "100%", minHeight: 60, padding: 12, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderRadius: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  counter: { color: colors.muted, fontSize: 11, textAlign: "right", marginTop: -8 },
+  fieldHint: { color: colors.muted, fontSize: 12, fontWeight: "700", marginTop: 4 },
+  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quickPrompt: { width: "48%", minHeight: 48, flexGrow: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderRadius: 11 },
+  quickText: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  activityHeading: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 8 },
+  approvalsSection: { paddingHorizontal: 16, gap: 10 },
+  activityCard: { marginHorizontal: 16, marginTop: 10, minHeight: 82, padding: 14, borderRadius: 14, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, gap: 9 },
+  stateBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
+  stateBadgeText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
+  actionRow: { flexDirection: "row", gap: 10 },
+  sessionHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  progressCard: { minHeight: 76, padding: 13, flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.panel, borderWidth: 1, borderColor: colors.border, borderRadius: 14 },
+  progressRing: { width: 42, height: 42, borderWidth: 3, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.panel2 },
   pill: {
     backgroundColor: colors.panel2,
     paddingHorizontal: 12,
@@ -1286,7 +1364,7 @@ const s = StyleSheet.create({
     width: 82,
     height: 82,
     borderRadius: 24,
-    backgroundColor: "#193B32",
+    backgroundColor: "#262032",
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
